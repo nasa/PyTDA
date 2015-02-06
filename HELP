@@ -1,0 +1,187 @@
+Help on module pytda:
+
+NAME
+    pytda
+
+FILE
+    /Users/tjlang/Documents/Python/pytda/pytda.py
+
+DESCRIPTION
+    Python Turbulence Detection Algorithm (PyTDA)
+    Version 0.6
+    Last Updated 11/26/2014
+    
+    
+    Major References
+    ----------------
+    Bohne, A. R. (1982). Radar detection of turbulence in precipitation environments. 
+        Journal of the Atmospheric Sciences, 39(8), 1819-1837.
+    Doviak, R. J., and D. S. Zrnic, 1993: Doppler Radar and Weather Observations,
+        Academic Press, 562 pp.
+    Labitt, M. (1981). Coordinated radar and aircraft observations of turbulence
+        (No. ATC-108). Federal Aviation Administration, Systems Research and
+        Development Service.
+    Williams, J. K., L. B. Cornman, J. Yee, S. G. Carson, G. Blackburn, and J. Craig, 
+        2006: NEXRAD detection of hazardous turbulence. 44th AIAA Aerospace Sciences
+        Meeting and Exhibit, Reno, NV.
+    
+    
+    Author
+    ------
+    Timothy James Lang
+    timothy.j.lang@nasa.gov
+    (256) 961-7861
+    
+    
+    Overview
+    --------
+    This software will estimate the cubic root of eddy dissipation rate, given
+    input radar data containing reflectivity and spectrum width. Can be done
+    on an individual sweep basis or by processing a full volume at once. If
+    the latter, a new turbulence field is created within the Py-ART radar object.
+    Based on the NCAR Turbulence Detection Algorithm (NTDA). For 2010 and older
+    NEXRAD data (V06 and earlier), recommend running on UFs produced from the native
+    Level 2 files via Radx due to conflicts between PyART and older NEXRAD data
+    models.
+    
+    
+    Change Log
+    ----------
+    Version 0.6 Major Changes (11/26/2014):
+    1. Changed from NTDA's lookup table to basic equations for relating spectrum
+       width to EDR. Now can account for radars with other beamwidths and
+       gate spacings than NEXRAD.
+    2. Added use_ntda flag to turn on/off NTDA-based filtering (i.e., can turn off
+       to straight up convert SW to EDR).
+    3. Performance improvements leading to significant code speedup.
+    4. Removed variables and imports related to NTDA lookup tables.
+    5. Changed name of different_sweeps flag to split_cut for improved clarity.
+    6. Changed atan2_cython function's name to atan2c_longitude to better indicate
+       its specialized nature. Added more generic atan2c function to 
+       pytda_cython_tools, although this is not currently used.
+    
+    Version 0.5 Major Changes:
+    1. Fixed a bug that prevented actual filtering of DZ/SW fields before turbulence
+       calculations in certain radar volumes. Performance improved considerably!
+    2. Fixed bug that set turbulence to 0 where it was never calculated to 
+       begin with. Should instead be the bad data fill value for spectrum width.
+    3. Fixed bug that caused a crash when running calc_turb_vol() with
+       different_sweeps keyword set to True.
+    
+    Version 0.4 Major Changes:
+    1. Refactoring to reduce number of local variables in calc_turb_sweep() proper.
+    2. Added calc_turb_vol(), which leverages calc_turb_sweep() to process and
+       entire volume at once, and add the turbulence field to the Py-ART radar 
+       object.
+    3. Added add_turbulence_field() to create a Py-ART radar field for turbulence
+    
+    Version 0.3 Major Changes:
+    1. Refactoring of calc_turb_sweep() to drastically speed up processing.
+    
+    Version 0.2 Functionality:
+    1. calc_turb_sweep() - Input Py-ART radar object, receive back turbulence on
+       the specified sweep plus longitude and latitude in that coordinate system.
+
+FUNCTIONS
+    add_turbulence_field(radar, turbulence, turb_name='turbulence')
+    
+    atan2c_longitude(...)
+    
+    calc_cartesian_coords_radians(lon1r, lat1r, lon2r, lat2r)
+        Assumes conversion to radians has already occurred
+    
+    calc_cswv_cython(...)
+    
+    calc_turb_sweep(radar, sweep_number, radius=2.0, split_cut=False, xran=[-300.0, 300.0], yran=[-300.0, 300.0], verbose=False, name_dz='reflectivity', name_sw='spectrum_width', use_ntda=True, beamwidth=0.96, gate_spacing=0.25)
+        Provide a Py-ART radar object containing 'reflectivity' and 'spectrum_width'
+        variables as an argument, along with the sweep number and any necessary
+        changes to the keywords, and receive back turbulence for the same sweep
+        as spectrum width (along with longitude and latitude on the same coordinate
+        system).
+        radar = Py-ART radar object
+        sweep_number = Can be as low as 0, as high as # of sweeps minus 1
+        radius = radius of influence (km)
+        split_cut = Set to True if using NEXRAD or similar radar that has two
+                    separate low-level sweeps at the same tilt angle for DZ & SW
+        verbose = Set to True to get more information about calculation progress.
+        xran = [Min X from radar, Max X from radar], subsectioning improves
+               performance
+        yran = [Min Y from radar, Max Y from radar], subsectioning improves
+               performance
+        name_dz = Name of reflectivity field, used by Py-ART to access field
+        name_sw = Name of spectrum width field, used by Py-ART to access field
+        use_ntda = Flag to use the spatial averaging and weighting employed by NTDA
+        beamwidth = Beamwidth of radar in degrees
+        gate_spacing = Gate spacing of radar in km
+    
+    calc_turb_vol(radar, radius=2.0, split_cut=False, xran=[-300.0, 300.0], yran=[-300.0, 300.0], verbose=False, name_dz='reflectivity', name_sw='spectrum_width', turb_name='turbulence', max_split_cut=2, use_ntda=True, beamwidth=0.96, gate_spacing=0.25)
+        Leverages calc_turb_sweep() to process an entire radar volume for turbulence.
+        Has ability to account for split-cut sweeps in a volume (i.e., DZ & SW on
+        different, mismatched sweeps).
+        radar = Py-ART radar object
+        radius = Search radius for calculating EDR
+        split_cut = Set to True for split-cut volumes
+        xran = Spatial range in X to consider
+        yran = Spatial range in Y to consider
+        verbose = Set to True to get more information on calculation status
+        name_dz = Name of reflectivity field
+        name_sw = Name of spectrum width field
+        turb_name = Name for created turbulence field
+        max_split_cut = Total number of tilts that are affected by split cuts
+        use_ntda = Flag to use the spatial averaging and weighting employed by NTDA
+        beamwidth = Beamwidth of radar in degrees
+        gate_spacing = Gate spacing of radar in km
+    
+    edr_long_range(sw, rng, theta, gs)
+        For gate spacing < range * beamwidth
+        sw (spectrum width) in m/s,
+        rng (range) in km, 
+        theta (beamwidth) in deg, 
+        gs (gate spacing) in km
+    
+    edr_short_range(sw, rng, theta, gs)
+        For gate spacing > range * beamwidth
+        sw (spectrum width) in m/s,
+        rng (range) in km, 
+        theta (beamwidth) in deg, 
+        gs (gate spacing) in km
+    
+    flatten_and_reduce_data_array(array, condition)
+    
+    get_radar_latlon_plus_radians(radar)
+        Input Py-ART radar object, get lat/lon first in deg then in radians
+    
+    get_range_adjusted_nexrad_sweep(file, sweep)
+        Function under construction, not used yet.
+        Credit: JJ Helmus, DOE
+        file: Path and name of original radar file
+        sweep: Number of sweep needing range adjustment
+        Function will return sweep as radar object with modified range.
+    
+    get_sweep_azimuths(radar, sweep_number)
+    
+    get_sweep_data(radar, field_name, sweep_number)
+    
+    get_sweep_elevations(radar, sweep_number)
+    
+    polar_coords_to_latlon(radar, sweep_number)
+        Function under construction, not currently used
+
+DATA
+    CONSTANT = 2.1665887030822408
+    DEFAULT_BEAMWIDTH = 0.96
+    DEFAULT_DZ = 'reflectivity'
+    DEFAULT_GATE_SPACING = 0.25
+    DEFAULT_RADIUS = 2.0
+    DEFAULT_SW = 'spectrum_width'
+    DEFAULT_TURB = 'turbulence'
+    KOLMOGOROV_CONSTANT = 1.6
+    MAX_INT = [-300.0, 300.0]
+    RNG_MULT = 1000.0
+    RRV_SCALING_FACTOR = 3.3302184446307908
+    SPLIT_CUT_MAX = 2
+    VARIANCE_RADIUS_SW = 1.0
+    VERSION = '0.6'
+    gamma = <ufunc 'gamma'>
+    hypergeometric_gaussian = <ufunc 'hyp2f1'>
+    re = 6371.1
