@@ -1,7 +1,7 @@
 PyTDA README
 
 Installation:
-Make sure all files are in your PYTHONPATH
+Make sure this directory is in your PYTHONPATH
 
 Install Py-ART (https://github.com/ARM-DOE/pyart)
 
