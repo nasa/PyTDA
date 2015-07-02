@@ -5,8 +5,8 @@ THIS OPEN SOURCE AGREEMENT (“AGREEMENT”) DEFINES THE RIGHTS OF USE, REPRODUC
 Government Agency: NASA Marshall Space Flight Center 
 Government Agency Original Software Designation: MFS-33237-1
 Government Agency Original Software Title: Python Turbulence Detection Algorithm (PyTDA)
-User Registration Requested.  Please visit https://github.com/tjlang/pytda 
-Government Agency Point of Contact for Original Software: _timothy.j.lang@nasa.gov 
+User Registration Requested.  Please visit https://github.com/nasa/pytda 
+Government Agency Point of Contact for Original Software: timothy.j.lang@nasa.gov 
 
 
 1.	DEFINITIONS
