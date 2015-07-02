@@ -6,6 +6,7 @@ Last Updated 12/09/2014
 
 """
 
+
 def rsl_get_groundr_and_h(slant_r, elev):
 
     """
@@ -26,12 +27,14 @@ RSL_get_groundr_and_h, written by John Merritt and Dennis Flanigan
     """
 
     Re = 4.0/3.0 * 6371.1  # Effective earth radius in km.
-    h = np.sqrt(Re**2 + slant_r**2 - 2.0 * Re * slant_r * np.cos((elev + 90.0) * np.pi / 180.0))
-    gr = Re * np.arccos( ( Re**2 + h**2 - slant_r**2) / (2.0 * Re * h))
+    h = np.sqrt(Re**2 + slant_r**2 - 2.0 * Re * slant_r *
+                np.cos((elev + 90.0) * np.pi / 180.0))
+    gr = Re * np.arccos((Re**2 + h**2 - slant_r**2) / (2.0 * Re * h))
     h = h - Re
     return gr, h
 
 ###################################################
+
 
 def rsl_get_slantr_and_elev(gr, h):
 
@@ -60,5 +63,3 @@ RSL_get_slantr_and_elev, written by John Merritt and Dennis Flanigan
     elev = elev * 180.0/np.pi
     elev = elev - 90.0
     return slantr, elev
-
-
