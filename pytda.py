@@ -1,7 +1,7 @@
 """
 Python Turbulence Detection Algorithm (PyTDA)
-Version 0.8
-Last Updated 07/02/2015
+Version 0.9
+Last Updated 08/03/2015
 
 
 Major References
@@ -39,8 +39,11 @@ data models.
 
 Change Log
 ----------
+Version 0.9 Major Changes (08/03/2015):
+1. Made compliant with Python 3.
+
 Version 0.8 Major Changes (07/02/2015):
-1. Made all code pep8 compliant
+1. Made all code pep8 compliant.
 
 Version 0.7 Major Changes (03/16/2015):
 1. Minor edits to improve documentation and reduce number of local variables.
@@ -83,6 +86,7 @@ Version 0.2 Functionality:
 
 """
 
+from __future__ import print_function
 import numpy as np
 from sklearn.neighbors import BallTree
 from scipy.special import gamma as gamma
@@ -92,7 +96,7 @@ import pyart
 from rsl_tools import rsl_get_groundr_and_h
 from pytda_cython_tools import calc_cswv_cython, atan2c_longitude
 
-VERSION = '0.8'
+VERSION = '0.9'
 
 # sw_* as prefix = related to sweep
 # *_sw as suffix = related to spectrum width
@@ -175,13 +179,13 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
                         (np.cos(klatr) * np.sin(sw_gr/re) * np.cos(sw_azr_2d)))
 
     if verbose:
-        print time.time() - begin_time,\
-             'seconds to complete all preliminary processing'
+        print(time.time() - begin_time,
+              'seconds to complete all preliminary processing')
         begin_time = time.time()
 
     # Get longitude at every gate
-    for j in xrange(sweep_size):
-        for i in xrange(radar.ngates):
+    for j in np.arange(sweep_size):
+        for i in np.arange(radar.ngates):
             sw_lonr[j, i] = klonr +\
                 atan2c_longitude(sw_azr_1d[j], sw_gr[j, i],
                                  klatr, sw_latr[j, i])
@@ -195,8 +199,8 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
     cpr = 1.0  # Not calculating Cpr, user must remove second trip manually.
 
     if verbose:
-        print time.time() - begin_time,\
-              'seconds to compute longitudes and precompute Csnr, Crng, Czh'
+        print(time.time() - begin_time,
+              'seconds to compute longitudes and precompute Csnr, Crng, Czh')
         begin_time = time.time()
 
     xx, yy = calc_cartesian_coords_radians(sw_lonr, sw_latr, klonr, klatr)
@@ -222,7 +226,8 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
         turb_radar[condition] = turb_radar_f
         eps_sw = np.reshape(turb_radar, (len(sweep_az_sw), radar.ngates))
         if verbose:
-            print time.time() - overall_time, 'seconds to process radar sweep'
+            print(time.time() - overall_time,
+                  'seconds to process radar sweep')
         return eps_sw, sw_lat, sw_lon
 
     # Provided NTDA is wanted, continue flattening/reducing arrays
@@ -237,16 +242,17 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
     ind, ind_sw = _calc_tree(xx, yy, radius)
     cswv_sw = _calc_cswv_for_every_gate(xx, sweep_sw, ind_sw)
     if verbose:
-        print time.time() - begin_time,
-        print 'seconds to get eps, reduce data, compute BallTree, and get Cswv'
+        print(time.time() - begin_time,
+              'seconds to get eps, reduce data,',
+              'compute BallTree, and get Cswv')
         begin_time = time.time()
 
     # Loop thru data and do NTDA filtering
-    for i in xrange(len(xx)):
+    for i in np.arange(len(xx)):
         if verbose:
             if i % 50000 == 0:
-                print 'i =', i, 'of', len(xx) - 1,
-                print time.time() - begin_time, 'seconds elapsed during loop'
+                print('i =', i, 'of', len(xx) - 1,
+                      time.time() - begin_time, 'seconds elapsed during loop')
         if xran[0] < xx[i] < xran[1] and yran[0] < yy[i] < yran[1]:
             # Broadcating employed to minimize the amount of looping
             eps = eps_sw[ind[i]]**2
@@ -267,7 +273,7 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
     turb_radar[condition] = turb_radar_f
     turb_radar = np.reshape(turb_radar, (len(sweep_az_sw), radar.ngates))
     if verbose:
-        print time.time() - overall_time, 'seconds to process radar sweep'
+        print(time.time() - overall_time, 'seconds to process radar sweep')
     return turb_radar, sw_lat, sw_lon
 
 #######################################
@@ -307,7 +313,7 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
     index = np.min(radar.sweep_number['data'])
     while index <= np.max(radar.sweep_number['data']):
         if verbose:
-            print 'Sweep number:', index
+            print('Sweep number:', index)
         if split_cut and index < max_split_cut:
             ind_adj = index + 1
             dsw = True
@@ -330,7 +336,7 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
     turbulence = np.ma.array(turbulence, mask=combine)
     add_turbulence_field(radar, turbulence, turb_name)
     if verbose:
-        print (time.time()-vol_time)/60.0, 'minutes to process volume'
+        print((time.time()-vol_time)/60.0, 'minutes to process volume')
 
 ###################################
 
@@ -462,8 +468,8 @@ def polar_coords_to_latlon(radar, sweep_number):
                         (np.cos(klatr) * np.sin(sw_gr/re) * np.cos(sw_azr_2d)))
 
     # Get longitude at every gate as well as precompute eps_sw
-    for j in xrange(sweep_size):
-        for i in xrange(radar.ngates):
+    for j in np.arange(sweep_size):
+        for i in np.arange(radar.ngates):
             sw_lonr[j, i] = klonr + \
                 atan2c_longitude(sw_azr_1d[j], sw_gr[j, i], klatr,
                                  sw_latr[j, i])
@@ -486,7 +492,7 @@ def _retrieve_sweep_fields(radar, name_sw, name_dz, sweep_number,
         sweep_elev_sw = get_sweep_elevations(radar, sweep_number+1)
         dz_sw = 0.0 * sweep_sw
         # Map DZ to SW sweep arrangement
-        for inaz1 in xrange(len(sweep_az_sw)):
+        for inaz1 in np.arange(len(sweep_az_sw)):
             inaz2 = np.argmin(np.abs(sweep_az_sw[inaz1]-sweep_az_dz))
             dz_sw[inaz1][:] = sweep_dz[inaz2][:]
     else:
@@ -535,7 +541,7 @@ def _calc_czh_for_every_gate(dz_sw, sw_ht):
 
 def _calc_cswv_for_every_gate(xx, sweep_sw, ind_sw):
     cswv_sw = 0.0 * xx
-    for i in xrange(len(xx)):
+    for i in np.arange(len(xx)):
         # Get spectrum width variance via np.dot()
         # Provides ~30% speed improvement over var()
         a = sweep_sw[ind_sw[i]]
