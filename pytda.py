@@ -86,6 +86,7 @@ Version 0.2 Functionality:
 
 """
 
+from __future__ import print_function
 import numpy as np
 from sklearn.neighbors import BallTree
 from scipy.special import gamma as gamma
