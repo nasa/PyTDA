@@ -96,7 +96,7 @@ import pyart
 from rsl_tools import rsl_get_groundr_and_h
 from pytda_cython_tools import calc_cswv_cython, atan2c_longitude
 
-VERSION = '0.8'
+VERSION = '0.9'
 
 # sw_* as prefix = related to sweep
 # *_sw as suffix = related to spectrum width
