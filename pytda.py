@@ -1,7 +1,7 @@
 """
 Python Turbulence Detection Algorithm (PyTDA)
-Version 0.9
-Last Updated 08/03/2015
+Version 1.0
+Last Updated 08/23/2015
 
 
 Major References
@@ -39,6 +39,9 @@ data models.
 
 Change Log
 ----------
+Version 1.0 Major Changes (08/23/2015):
+1. Fixed issues for when radar object fields lack masks or fill values.
+
 Version 0.9 Major Changes (08/03/2015):
 1. Made compliant with Python 3.
 
@@ -96,7 +99,7 @@ import pyart
 from rsl_tools import rsl_get_groundr_and_h
 from pytda_cython_tools import calc_cswv_cython, atan2c_longitude
 
-VERSION = '0.9'
+VERSION = '1.0'
 
 # sw_* as prefix = related to sweep
 # *_sw as suffix = related to spectrum width
@@ -114,6 +117,7 @@ SPLIT_CUT_MAX = 2  # maximum number of split cut sweeps
 RRV_SCALING_FACTOR = (8.0 * np.log(4.0))**0.5  # From Bohne (1982)
 KOLMOGOROV_CONSTANT = 1.6
 CONSTANT = KOLMOGOROV_CONSTANT * gamma(2.0/3.0)
+BAD_DATA_VAL = -32768
 
 # TO DO: Class definition here to simplify calc_turb_sweep() code?
 
@@ -153,8 +157,14 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
         begin_time = time.time()
 
     sweep_dz = get_sweep_data(radar, name_dz, sweep_number)
-    fill_val_sw = radar.fields[name_sw]['_FillValue']
-    fill_val_dz = radar.fields[name_dz]['_FillValue']
+    try:
+        fill_val_sw = radar.fields[name_sw]['_FillValue']
+    except KeyError:
+        fill_val_sw = BAD_DATA_VAL
+    try:
+        fill_val_dz = radar.fields[name_dz]['_FillValue']
+    except KeyError:
+        fill_val_dz = BAD_DATA_VAL
     sweep_sw, sweep_az_sw, sweep_elev_sw, dz_sw = \
         _retrieve_sweep_fields(radar, name_sw, name_dz, sweep_number,
                                sweep_dz, split_cut)
@@ -307,9 +317,15 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
 
     if verbose:
         vol_time = time.time()
-    turbulence = 0.0 * radar.fields[name_sw]['data'][:].filled(
-        fill_value=radar.fields[name_sw]['_FillValue']) + \
-        radar.fields[name_sw]['_FillValue']
+    try:
+        fill_value = radar.fields[name_sw]['_FillValue']
+    except KeyError:
+        fill_value = BAD_DATA_VAL
+    try:
+        turbulence = 0.0 * radar.fields[name_sw]['data'][:].filled(
+            fill_value=fill_value) + fill_value
+    except AttributeError:
+        turbulence = 0.0 * radar.fields[name_sw]['data'][:] + fill_value
     index = np.min(radar.sweep_number['data'])
     while index <= np.max(radar.sweep_number['data']):
         if verbose:
@@ -384,10 +400,21 @@ def add_turbulence_field(radar, turbulence, turb_name='turbulence'):
 
 
 def get_sweep_data(radar, field_name, sweep_number):
-    return radar.fields[field_name]['data'][
-        radar.sweep_start_ray_index['data'][sweep_number]:
-        radar.sweep_end_ray_index['data'][sweep_number]+1][:].filled(
-            fill_value=radar.fields[field_name]['_FillValue'])
+    # Check if _FillValue exists
+    try:
+        fill_value = radar.fields[field_name]['_FillValue']
+    except KeyError:
+        fill_value = BAD_DATA_VAL
+    # Check if masked array
+    try:
+        return radar.fields[field_name]['data'][
+            radar.sweep_start_ray_index['data'][sweep_number]:
+            radar.sweep_end_ray_index['data'][sweep_number]+1][:].filled(
+                fill_value=fill_value)
+    except AttributeError:
+        return radar.fields[field_name]['data'][
+            radar.sweep_start_ray_index['data'][sweep_number]:
+            radar.sweep_end_ray_index['data'][sweep_number]+1][:]
 
 
 def get_sweep_azimuths(radar, sweep_number):
