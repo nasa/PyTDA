@@ -1,7 +1,7 @@
 """
 Python Turbulence Detection Algorithm (PyTDA)
 Version 1.0
-Last Updated 08/23/2015
+Last Updated 08/28/2015
 
 
 Major References
@@ -39,8 +39,9 @@ data models.
 
 Change Log
 ----------
-Version 1.0 Major Changes (08/23/2015):
+Version 1.0 Major Changes (08/28/2015):
 1. Fixed issues for when radar object fields lack masks or fill values.
+2. Fixed failure when radar.sweep_number attribute is not sequential
 
 Version 0.9 Major Changes (08/03/2015):
 1. Made compliant with Python 3.
@@ -326,8 +327,11 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
             fill_value=fill_value) + fill_value
     except AttributeError:
         turbulence = 0.0 * radar.fields[name_sw]['data'][:] + fill_value
-    index = np.min(radar.sweep_number['data'])
-    while index <= np.max(radar.sweep_number['data']):
+    # Commented section fails if sweep_number not [0, 1, 2, 3 ...]
+    # index = np.min(radar.sweep_number['data'])
+    # while index <= np.max(radar.sweep_number['data']):
+    index = 0
+    while index < radar.nsweeps:
         if verbose:
             print('Sweep number:', index)
         if split_cut and index < max_split_cut:
@@ -336,17 +340,21 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
         else:
             ind_adj = index
             dsw = False
-        sweep_range = [radar.sweep_start_ray_index['data'][ind_adj],
-                       radar.sweep_end_ray_index['data'][ind_adj]+1]
-        turbulence[sweep_range[0]:sweep_range[1]], glat, glon = \
-            calc_turb_sweep(radar, index, radius=radius, split_cut=dsw,
-                            verbose=verbose, xran=xran, yran=yran,
-                            name_dz=name_dz, name_sw=name_sw,
-                            use_ntda=use_ntda, beamwidth=beamwidth,
-                            gate_spacing=gate_spacing)
-        index += 1
-        if split_cut and index < max_split_cut:
+        try:
+            sweep_range = [radar.sweep_start_ray_index['data'][ind_adj],
+                           radar.sweep_end_ray_index['data'][ind_adj]+1]
+            turbulence[sweep_range[0]:sweep_range[1]], glat, glon = \
+                calc_turb_sweep(radar, index, radius=radius, split_cut=dsw,
+                                verbose=verbose, xran=xran, yran=yran,
+                                name_dz=name_dz, name_sw=name_sw,
+                                use_ntda=use_ntda, beamwidth=beamwidth,
+                                gate_spacing=gate_spacing)
+        except IndexError:
+            print('Ran out of sweeps')
+        finally:
             index += 1
+            if split_cut and index < max_split_cut:
+                index += 1
     combine = np.ma.mask_or(radar.fields[name_dz]['data'].mask,
                             radar.fields[name_sw]['data'].mask)
     turbulence = np.ma.array(turbulence, mask=combine)
@@ -396,7 +404,7 @@ def add_turbulence_field(radar, turbulence, turb_name='turbulence'):
                   'units': 'm^2/3 s^-1',
                   'long_name': 'Cubic Root of Eddy Dissipation Rate',
                   'standard_name': "EDR^1/3"}
-    radar.add_field(turb_name, field_dict)
+    radar.add_field(turb_name, field_dict, replace_existing=True)
 
 
 def get_sweep_data(radar, field_name, sweep_number):
