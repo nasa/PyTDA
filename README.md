@@ -10,12 +10,9 @@ For help see `HELP` file. For license see `LICENSE.md`.
 Installation
 ------------
 
-Make sure this directory is in your `PYTHONPATH`.
-
 Install [Py-ART](https://github.com/ARM-DOE/pyart).
 
-Run `compile_pytda_cython_code.sh` from the command line. The shared object file
-that is created by this is only valid for the version of Python that it was compiled under.
+Run `python setup.py install` from the command line in the main PyTDA folder.
 
 
 Using PyTDA

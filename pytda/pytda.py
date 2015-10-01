@@ -97,8 +97,8 @@ from scipy.special import gamma as gamma
 from scipy.special import hyp2f1 as hypergeometric_gaussian
 import time
 import pyart
-from rsl_tools import rsl_get_groundr_and_h
-from pytda_cython_tools import calc_cswv_cython, atan2c_longitude
+from .rsl_tools import rsl_get_groundr_and_h
+from .pytda_cython_tools import calc_cswv_cython, atan2c_longitude
 
 VERSION = '1.0'
 
