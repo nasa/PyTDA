@@ -39,6 +39,9 @@ data models.
 
 Change Log
 ----------
+Version 1.1 Major Changes (10/22/2015):
+1. Fixed more issues for when radar object fields lack masks or fill values.
+
 Version 1.0 Major Changes (08/28/2015):
 1. Fixed issues for when radar object fields lack masks or fill values.
 2. Fixed failure when radar.sweep_number attribute is not sequential
@@ -100,7 +103,7 @@ import pyart
 from .rsl_tools import rsl_get_groundr_and_h
 from .pytda_cython_tools import calc_cswv_cython, atan2c_longitude
 
-VERSION = '1.0'
+VERSION = '1.1'
 
 # sw_* as prefix = related to sweep
 # *_sw as suffix = related to spectrum width
@@ -355,8 +358,20 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
             index += 1
             if split_cut and index < max_split_cut:
                 index += 1
-    combine = np.ma.mask_or(radar.fields[name_dz]['data'].mask,
-                            radar.fields[name_sw]['data'].mask)
+    # Combine DZ and SW masks if available
+    if hasattr(radar.fields[name_dz]['data'], 'mask'):
+        mask1 = radar.fields[name_dz]['data'].mask
+    else:
+        try:
+            fill_val_dz = radar.fields[name_dz]['_FillValue']
+        except KeyError:
+            fill_val_dz = BAD_DATA_VAL
+        mask1 = radar.fields[name_dz]['data'] == fill_val_dz
+    if hasattr(radar.fields[name_sw]['data'], 'mask'):
+        mask2 = radar.fields[name_sw]['data'].mask
+    else:
+        mask2 = radar.fields[name_sw]['data'] == fill_value
+    combine = np.ma.mask_or(mask1, mask2)
     turbulence = np.ma.array(turbulence, mask=combine)
     add_turbulence_field(radar, turbulence, turb_name)
     if verbose:
