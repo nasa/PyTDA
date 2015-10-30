@@ -33,7 +33,7 @@ on an individual sweep basis or by processing a full volume at once. If
 the latter, a new turbulence field is created within the Py-ART radar object.
 Based on the NCAR Turbulence Detection Algorithm (NTDA). For 2010 and older
 NEXRAD data (V06 and earlier), recommend running on UFs produced from the
-native Level 2 files via Radx due to conflicts between PyART and older NEXRAD
+native Level 2 files via Radx due to conflicts between Py-ART and older NEXRAD
 data models.
 
 
