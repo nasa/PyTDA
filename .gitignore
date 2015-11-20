@@ -1,0 +1,11 @@
+build
+notebooks/PyTDA_Demo-AMS_OSRSC.ipynb
+notebooks/*.uf
+.ipynb_checkpoints
+dist
+old
+output
+release_docs
+screenshots
+pytda.egg-info
+notebooks/*.nc
