@@ -1,7 +1,7 @@
 """
 Python Turbulence Detection Algorithm (PyTDA)
-Version 1.0
-Last Updated 08/28/2015
+Version 1.1
+Last Updated 10/29/2015
 
 
 Major References
@@ -32,13 +32,17 @@ input radar data containing reflectivity and spectrum width. Can be done
 on an individual sweep basis or by processing a full volume at once. If
 the latter, a new turbulence field is created within the Py-ART radar object.
 Based on the NCAR Turbulence Detection Algorithm (NTDA). For 2010 and older
-NEXRAD data (V06 and earlier), recommend running on UFs produced from the
-native Level 2 files via Radx due to conflicts between PyART and older NEXRAD
+NEXRAD data (V06 and earlier), recommend running on CF Radials produced from
+native Level 2 files via Radx due to conflicts between Py-ART and older NEXRAD
 data models.
 
 
 Change Log
 ----------
+Version 1.1 Major Changes (10/29/2015):
+1. Fixed more issues for when radar object fields lack masks or fill values.
+2. Enabled RHI functionality
+
 Version 1.0 Major Changes (08/28/2015):
 1. Fixed issues for when radar object fields lack masks or fill values.
 2. Fixed failure when radar.sweep_number attribute is not sequential
@@ -97,10 +101,11 @@ from scipy.special import gamma as gamma
 from scipy.special import hyp2f1 as hypergeometric_gaussian
 import time
 import pyart
+from pyart.io.common import radar_coords_to_cart
 from .rsl_tools import rsl_get_groundr_and_h
 from .pytda_cython_tools import calc_cswv_cython, atan2c_longitude
 
-VERSION = '1.0'
+VERSION = '1.1'
 
 # sw_* as prefix = related to sweep
 # *_sw as suffix = related to spectrum width
@@ -174,7 +179,7 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
     # of every gate for distance calculations
     klat, klon, klatr, klonr = get_radar_latlon_plus_radians(radar)
 
-    # Initialize information on sweep geomtery
+    # Initialize information on sweep geometry
     sw_lonr = 0.0 * sweep_sw
     sw_azr_1d = np.deg2rad(sweep_az_sw)
     sw_sr_1d = radar.range['data'][:] / RNG_MULT
@@ -313,20 +318,12 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
     use_ntda = Flag to use the spatial averaging and weighting employed by NTDA
     beamwidth = Beamwidth of radar in degrees
     gate_spacing = Gate spacing of radar in km
-
     """
 
     if verbose:
         vol_time = time.time()
-    try:
-        fill_value = radar.fields[name_sw]['_FillValue']
-    except KeyError:
-        fill_value = BAD_DATA_VAL
-    try:
-        turbulence = 0.0 * radar.fields[name_sw]['data'][:].filled(
-            fill_value=fill_value) + fill_value
-    except AttributeError:
-        turbulence = 0.0 * radar.fields[name_sw]['data'][:] + fill_value
+    fill_value, turbulence = _initialize_turb_field(radar, name_sw)
+
     # Commented section fails if sweep_number not [0, 1, 2, 3 ...]
     # index = np.min(radar.sweep_number['data'])
     # while index <= np.max(radar.sweep_number['data']):
@@ -355,9 +352,59 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
             index += 1
             if split_cut and index < max_split_cut:
                 index += 1
-    combine = np.ma.mask_or(radar.fields[name_dz]['data'].mask,
-                            radar.fields[name_sw]['data'].mask)
-    turbulence = np.ma.array(turbulence, mask=combine)
+
+    turbulence = _finalize_turb_field(radar, turbulence, name_dz, name_sw)
+    add_turbulence_field(radar, turbulence, turb_name)
+    if verbose:
+        print((time.time()-vol_time)/60.0, 'minutes to process volume')
+
+###################################
+
+
+def calc_turb_rhi(radar, radius=1.0, verbose=False,
+                  name_dz=DEFAULT_DZ, name_sw=DEFAULT_SW,
+                  turb_name=DEFAULT_TURB, max_split_cut=SPLIT_CUT_MAX,
+                  use_ntda=True, beamwidth=None,
+                  gate_spacing=DEFAULT_GATE_SPACING):
+    """
+    Processes an entire RHI radar volume for turbulence.
+    radar = Py-ART radar object
+    radius = Search radius for calculating EDR
+    verbose = Set to True to get more information on calculation status
+    name_dz = Name of reflectivity field
+    name_sw = Name of spectrum width field
+    turb_name = Name for created turbulence field
+    use_ntda = Flag to use the spatial averaging and weighting employed by NTDA
+    beamwidth = Beamwidth of radar in degrees
+    gate_spacing = Gate spacing of radar in km
+    """
+    if verbose:
+        vol_time = time.time()
+    
+    fill_value, turbulence = _initialize_turb_field(radar, name_sw)
+    if beamwidth is None:
+        beamwidth = radar.instrument_parameters['radar_beam_width_v']['data']
+
+    index = 0
+    while index < radar.nsweeps:
+        if verbose:
+            print('Sweep number:', index)
+        ind_adj = index
+        try:
+            sweep_range = [radar.sweep_start_ray_index['data'][ind_adj],
+                           radar.sweep_end_ray_index['data'][ind_adj]+1]
+            turbulence[sweep_range[0]:sweep_range[1]] = \
+                _calc_turb_rhi_sweep(
+                    radar, index, radius=radius, verbose=verbose,
+                    name_dz=name_dz, name_sw=name_sw,
+                    use_ntda=use_ntda, beamwidth=beamwidth,
+                    gate_spacing=gate_spacing)
+        except IndexError:
+            print('Ran out of sweeps')
+        finally:
+            index += 1
+
+    turbulence = _finalize_turb_field(radar, turbulence, name_dz, name_sw)
     add_turbulence_field(radar, turbulence, turb_name)
     if verbose:
         print((time.time()-vol_time)/60.0, 'minutes to process volume')
@@ -459,62 +506,168 @@ def flatten_and_reduce_data_array(array, condition):
     return array[condition]
 
 ###################################
-# FUNCTIONS UNDER CONSTRUCTION HERE
+# INTERNAL FUNCTIONS FOLLOW
 ###################################
 
 
-def get_range_adjusted_nexrad_sweep(file, sweep):
+def _calc_turb_rhi_sweep(radar, sweep_number, radius=1.0,
+                         verbose=False, name_dz=DEFAULT_DZ,
+                         name_sw=DEFAULT_SW, use_ntda=True,
+                         beamwidth=DEFAULT_BEAMWIDTH,
+                         gate_spacing=DEFAULT_GATE_SPACING):
     """
-    Function under construction, not used yet.
-    Credit: JJ Helmus, DOE
-    file: Path and name of original radar file
-    sweep: Number of sweep needing range adjustment
-    Function will return sweep as radar object with modified range.
+    radar = Py-ART radar object
+    sweep_number = Can be as low as 0, as high as # of sweeps minus 1
+    radius = radius of influence (km)
+    verbose = Set to True to get more information about calculation progress.
+    name_dz = Name of reflectivity field, used by Py-ART to access field
+    name_sw = Name of spectrum width field, used by Py-ART to access field
+    use_ntda = Flag to use the spatial averaging and weighting employed by NTDA
+    beamwidth = Beamwidth of radar in degrees
+    gate_spacing = Gate spacing of radar in km
     """
-    nfile = pyart.io.nexrad_level2.NEXRADLevel2File(file)
-    radar_base = pyart.io.read(file)
-    radar_sweep = radar_base.extract_sweeps([sweep])
-    _range = nfile.get_range(sweep, 'REF')
-    radar_sweep.range['data'][:len(_range)] = _range[:]
-    return radar_sweep
+    if verbose:
+        overall_time = time.time()
+        begin_time = time.time()
 
-
-def polar_coords_to_latlon(radar, sweep_number):
-    """Function under construction, not currently used"""
-    # Radar location needed to get lat/lon of every gate
-    klat, klon, klatr, klonr = get_radar_latlon_plus_radians(radar)
-
-    # Initialize information on sweep geometry
-    sweep_sw = get_sweep_data(radar, DEFAULT_SW, sweep_number)
-    sweep_az_sw = get_sweep_azimuths(radar, sweep_number)
+    dz_sw = get_sweep_data(radar, name_dz, sweep_number)
+    try:
+        fill_val_sw = radar.fields[name_sw]['_FillValue']
+    except KeyError:
+        fill_val_sw = BAD_DATA_VAL
+    try:
+        fill_val_dz = radar.fields[name_dz]['_FillValue']
+    except KeyError:
+        fill_val_dz = BAD_DATA_VAL
+    sweep_sw = get_sweep_data(radar, name_sw, sweep_number)
     sweep_elev_sw = get_sweep_elevations(radar, sweep_number)
-    sw_lonr = 0.0 * sweep_sw
-    sw_azr_1d = np.deg2rad(sweep_az_sw)
+
     sw_sr_1d = radar.range['data'][:] / RNG_MULT
-    result = np.meshgrid(sw_sr_1d, sweep_az_sw)
-    sw_azr_2d = np.deg2rad(result[1])
-    sw_sr_2d = result[0]
     result = np.meshgrid(sw_sr_1d, sweep_elev_sw)
+    sw_sr_2d = result[0]
     sw_el = result[1]
     sweep_size = radar.sweep_end_ray_index['data'][sweep_number] + 1 - \
         radar.sweep_start_ray_index['data'][sweep_number]
-    sw_gr, sw_ht = rsl_get_groundr_and_h(sw_sr_2d, sw_el)
-    sw_latr = np.arcsin((np.sin(klatr) * np.cos(sw_gr/re)) +
-                        (np.cos(klatr) * np.sin(sw_gr/re) * np.cos(sw_azr_2d)))
+    xx, yy = rsl_get_groundr_and_h(sw_sr_2d, sw_el)
 
-    # Get longitude at every gate as well as precompute eps_sw
-    for j in np.arange(sweep_size):
-        for i in np.arange(radar.ngates):
-            sw_lonr[j, i] = klonr + \
-                atan2c_longitude(sw_azr_1d[j], sw_gr[j, i], klatr,
-                                 sw_latr[j, i])
-    sw_lat = np.rad2deg(sw_latr)
-    sw_lon = np.rad2deg(sw_lonr)
-    return sw_lat, sw_lon
+    if verbose:
+        print(time.time() - begin_time,
+              'seconds to complete all preliminary processing')
+        begin_time = time.time()
+
+    # Determine NTDA interest fields
+    csnr_sw = _calc_csnr_for_every_gate(dz_sw, sw_sr_2d)
+    crng_sw = _calc_crng_for_every_gate(sw_sr_2d)
+    czh_sw = _calc_czh_for_every_gate(dz_sw, yy)
+    cpr = 1.0  # Not calculating Cpr, user must remove second trip manually.
+
+    if verbose:
+        print(time.time() - begin_time,
+              'seconds to precompute Csnr, Crng, Czh')
+        begin_time = time.time()
+
+    # Flatten all arrays to avoid performance buzzkill of nested loops.
+    # Then reduce the data using masks to make the job manageable.
+    sweep_sw = sweep_sw.ravel()
+    dz_sw = dz_sw.ravel()
+    condition = np.logical_and(dz_sw != fill_val_dz, sweep_sw != fill_val_sw)
+    sweep_sw = sweep_sw[condition]
+    dz_sw = dz_sw[condition]
+
+    # Brief detour to get eps and check to see if that's all user wants.
+    # Placing this code here with reduced sweep_sw improves performance.
+    sr_1d = flatten_and_reduce_data_array(sw_sr_2d, condition)
+    cond = gate_spacing >= sr_1d * np.deg2rad(beamwidth)
+    eps_sw = edr_long_range(sweep_sw, sr_1d, beamwidth, gate_spacing)
+    eps_sw[cond] = edr_short_range(sweep_sw[cond], sr_1d[cond],
+                                   beamwidth, gate_spacing)
+    if not use_ntda:
+        turb_radar_f = 1.0 * eps_sw
+        turb_radar = sweep_sw.flatten() * 0.0 + fill_val_sw
+        turb_radar[condition] = turb_radar_f
+        eps_sw = np.reshape(turb_radar, (len(sweep_elev_sw), radar.ngates))
+        if verbose:
+            print(time.time() - overall_time,
+                  'seconds to process radar sweep')
+        return eps_sw
+
+    # Provided NTDA is wanted, continue flattening/reducing arrays
+    xx = flatten_and_reduce_data_array(xx, condition)
+    yy = flatten_and_reduce_data_array(yy, condition)
+    csnr_sw = flatten_and_reduce_data_array(csnr_sw, condition)
+    crng_sw = flatten_and_reduce_data_array(crng_sw, condition)
+    czh_sw = flatten_and_reduce_data_array(czh_sw, condition)
+    turb_radar_f = 0.0 * sweep_sw + fill_val_sw
+
+    # Find the distance to every other good gate
+    ind, ind_sw = _calc_tree(xx, yy, radius)
+    cswv_sw = _calc_cswv_for_every_gate(xx, sweep_sw, ind_sw)
+    if verbose:
+        print(time.time() - begin_time,
+              'seconds to get eps, reduce data,',
+              'compute BallTree, and get Cswv')
+        begin_time = time.time()
+
+    # Loop thru data and do NTDA filtering
+    for i in np.arange(len(xx)):
+        if verbose:
+            if i % 50000 == 0:
+                print('i =', i, 'of', len(xx) - 1,
+                      time.time() - begin_time, 'seconds elapsed during loop')
+        # Broadcating employed to minimize the amount of looping
+        eps = eps_sw[ind[i]]**2
+        csnr = csnr_sw[ind[i]]**0.6667
+        crng = crng_sw[ind[i]]
+        czh = czh_sw[ind[i]]
+        cswv = cswv_sw[ind[i]]
+        # Begin NTDA-specific calculation
+        tot = csnr * cpr * cswv * czh * crng
+        num = tot * eps
+        tot = np.sum(tot)
+        num = np.sum(num)
+        if tot > 0:
+            turb_radar_f[i] = np.sqrt(num/tot)
+
+    # Restore turbulence to a full 2-D sweep array and return along w/ lat/lon.
+    turb_radar = sw_sr_2d.flatten() * 0.0 + fill_val_sw
+    turb_radar[condition] = turb_radar_f
+    turb_radar = np.reshape(turb_radar, (len(sweep_elev_sw), radar.ngates))
+    if verbose:
+        print(time.time() - overall_time, 'seconds to process radar sweep')
+    return turb_radar
 
 ###################################
-# INTERNAL FUNCTIONS FOLLOW
-###################################
+
+
+def _initialize_turb_field(radar, name_sw):
+    try:
+        fill_value = radar.fields[name_sw]['_FillValue']
+    except KeyError:
+        fill_value = BAD_DATA_VAL
+    try:
+        turbulence = 0.0 * radar.fields[name_sw]['data'][:].filled(
+            fill_value=fill_value) + fill_value
+    except AttributeError:
+        turbulence = 0.0 * radar.fields[name_sw]['data'][:] + fill_value
+    return fill_value, turbulence
+
+
+def _finalize_turb_field(radar, turbulence, name_dz, name_sw):
+    # Combine DZ and SW masks if available
+    if hasattr(radar.fields[name_dz]['data'], 'mask'):
+        mask1 = radar.fields[name_dz]['data'].mask
+    else:
+        try:
+            fill_val_dz = radar.fields[name_dz]['_FillValue']
+        except KeyError:
+            fill_val_dz = BAD_DATA_VAL
+        mask1 = radar.fields[name_dz]['data'] == fill_val_dz
+    if hasattr(radar.fields[name_sw]['data'], 'mask'):
+        mask2 = radar.fields[name_sw]['data'].mask
+    else:
+        mask2 = radar.fields[name_sw]['data'] == fill_value
+    combine = np.ma.mask_or(mask1, mask2)
+    return np.ma.array(turbulence, mask=combine)
 
 
 def _retrieve_sweep_fields(radar, name_sw, name_dz, sweep_number,
