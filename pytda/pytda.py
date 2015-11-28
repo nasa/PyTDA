@@ -1,7 +1,7 @@
 """
 Python Turbulence Detection Algorithm (PyTDA)
-Version 1.1
-Last Updated 10/29/2015
+Version 1.1.1
+Last Updated 11/27/2015
 
 
 Major References
@@ -39,6 +39,11 @@ data models.
 
 Change Log
 ----------
+Version 1.1.1 Major Changes (11/27/2015):
+1. Added common sub-module with old radar_coords_to_cart function that was
+   in old version of Py-ART. Recent upgrade of Py-ART removed this function,
+   breaking PyTDA in the process.
+
 Version 1.1 Major Changes (10/29/2015):
 1. Fixed more issues for when radar object fields lack masks or fill values.
 2. Enabled RHI functionality
@@ -101,11 +106,11 @@ from scipy.special import gamma as gamma
 from scipy.special import hyp2f1 as hypergeometric_gaussian
 import time
 import pyart
-from pyart.io.common import radar_coords_to_cart
+from .common import radar_coords_to_cart
 from .rsl_tools import rsl_get_groundr_and_h
 from .pytda_cython_tools import calc_cswv_cython, atan2c_longitude
 
-VERSION = '1.1'
+VERSION = '1.1.1'
 
 # sw_* as prefix = related to sweep
 # *_sw as suffix = related to spectrum width

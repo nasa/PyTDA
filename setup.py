@@ -14,7 +14,7 @@ from Cython.Distutils import build_ext
 # - Pull the header into a variable
 doclines = __doc__.split("\n")
 
-VERSION = '1.1'
+VERSION = '1.1.1'
 
 # - Set variables for setup
 PACKAGES = ['pytda']
