@@ -4,6 +4,7 @@ Python Turbulence Detection Algorithm (PyTDA)
 
 import os
 import sys
+import numpy
 from distutils.core import setup
 from setuptools import find_packages
 from distutils.sysconfig import get_python_lib
@@ -24,8 +25,8 @@ USE_CYTHON = True  # command line option, try-import, ...
 
 ext = '.pyx' if USE_CYTHON else '.c'
 
-extensions = [Extension("pytda/pytda_cython_tools",
-              ["pytda/pytda_cython_tools"+ext])]
+extensions = [Extension(PACKAGES[0]+'.pytda_cython_tools',
+              [PACKAGES[0]+'/pytda_cython_tools'+ext])]
 
 if USE_CYTHON:
     from Cython.Build import cythonize
@@ -49,5 +50,6 @@ setup(
         Operating System :: MacOS
         """],
       long_description="""Python Turbulence Detection Algorithm (PyTDA)""",
-      ext_modules=extensions
+      ext_modules=extensions,
+      include_dirs = [numpy.get_include(), '.']
 )
