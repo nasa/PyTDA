@@ -5,8 +5,8 @@ NAME
 
 DESCRIPTION
     Python Turbulence Detection Algorithm (PyTDA)
-    Version 0.9
-    Last Updated 08/03/2015
+    Version 1.1.2
+    Last Updated 07/31/2019
     
     
     Major References
@@ -44,6 +44,23 @@ DESCRIPTION
     
     Change Log
     ----------
+    Version 1.1.2 Major Changes (07/31/2019):
+    1. Fixed a bug in the RHI code that was preventing processing when
+       use_ntda=False.
+
+    Version 1.1.1 Major Changes (11/27/2015):
+    1. Added common sub-module with old radar_coords_to_cart function that was
+       in old version of Py-ART. Recent upgrade of Py-ART removed this function,
+       breaking PyTDA in the process.
+
+    Version 1.1 Major Changes (10/29/2015):
+    1. Fixed more issues for when radar object fields lack masks or fill values.
+    2. Enabled RHI functionality
+
+    Version 1.0 Major Changes (08/28/2015):
+    1. Fixed issues for when radar object fields lack masks or fill values.
+    2. Fixed failure when radar.sweep_number attribute is not sequential
+
     Version 0.9 Major Changes (08/03/2015):
     1. Made compliant with Python 3.
     

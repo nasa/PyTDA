@@ -1,7 +1,7 @@
 """
 Python Turbulence Detection Algorithm (PyTDA)
-Version 1.1.1
-Last Updated 11/27/2015
+Version 1.1.2
+Last Updated 07/31/2019
 
 
 Major References
@@ -39,6 +39,10 @@ data models.
 
 Change Log
 ----------
+Version 1.1.2 Major Changes (07/31/2019):
+1. Fixed a bug in the RHI code that was preventing processing when
+   use_ntda=False.
+
 Version 1.1.1 Major Changes (11/27/2015):
 1. Added common sub-module with old radar_coords_to_cart function that was
    in old version of Py-ART. Recent upgrade of Py-ART removed this function,
@@ -385,7 +389,7 @@ def calc_turb_rhi(radar, radius=1.0, verbose=False,
     """
     if verbose:
         vol_time = time.time()
-    
+
     fill_value, turbulence = _initialize_turb_field(radar, name_sw)
     if beamwidth is None:
         beamwidth = radar.instrument_parameters['radar_beam_width_v']['data']
@@ -588,7 +592,7 @@ def _calc_turb_rhi_sweep(radar, sweep_number, radius=1.0,
                                    beamwidth, gate_spacing)
     if not use_ntda:
         turb_radar_f = 1.0 * eps_sw
-        turb_radar = sweep_sw.flatten() * 0.0 + fill_val_sw
+        turb_radar = sw_sr_2d.flatten() * 0.0 + fill_val_sw
         turb_radar[condition] = turb_radar_f
         eps_sw = np.reshape(turb_radar, (len(sweep_elev_sw), radar.ngates))
         if verbose:
