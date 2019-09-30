@@ -10,4 +10,3 @@ screenshots
 pytda.egg-info
 notebooks/*.nc
 references
-pytda/__pycache__/
