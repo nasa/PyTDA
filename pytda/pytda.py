@@ -142,7 +142,8 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
                     xran=MAX_INT, yran=MAX_INT, verbose=False,
                     name_dz=DEFAULT_DZ, name_sw=DEFAULT_SW,
                     use_ntda=True, beamwidth=DEFAULT_BEAMWIDTH,
-                    gate_spacing=DEFAULT_GATE_SPACING):
+                    gate_spacing=DEFAULT_GATE_SPACING,
+                    compute_gate_pos=False):
     """
     Provide a Py-ART radar object containing reflectivity and spectrum width
     variables as an argument, along with the sweep number and any necessary
@@ -164,6 +165,8 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
     use_ntda = Flag to use the spatial averaging and weighting employed by NTDA
     beamwidth = Beamwidth of radar in degrees
     gate_spacing = Gate spacing of radar in km
+    compute_gate_pos = If True computes the radar gate position. Otherwise
+                       reads it from the radar object
 
     """
 
@@ -180,42 +183,19 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
         fill_val_dz = radar.fields[name_dz]['_FillValue']
     except KeyError:
         fill_val_dz = BAD_DATA_VAL
+
     sweep_sw, sweep_az_sw, sweep_elev_sw, dz_sw = \
         _retrieve_sweep_fields(radar, name_sw, name_dz, sweep_number,
                                sweep_dz, split_cut)
 
-    # Radar location needed to get lat/lon
-    # of every gate for distance calculations
-    klat, klon, klatr, klonr = get_radar_latlon_plus_radians(radar)
-
     # Initialize information on sweep geometry
-    sw_lonr = 0.0 * sweep_sw
-    sw_azr_1d = np.deg2rad(sweep_az_sw)
     sw_sr_1d = radar.range['data'][:] / RNG_MULT
     result = np.meshgrid(sw_sr_1d, sweep_az_sw)
     sw_azr_2d = np.deg2rad(result[1])
     sw_sr_2d = result[0]
     result = np.meshgrid(sw_sr_1d, sweep_elev_sw)
     sw_el = result[1]
-    sweep_size = radar.sweep_end_ray_index['data'][sweep_number] + 1 - \
-        radar.sweep_start_ray_index['data'][sweep_number]
     sw_gr, sw_ht = rsl_get_groundr_and_h(sw_sr_2d, sw_el)
-    sw_latr = np.arcsin((np.sin(klatr) * np.cos(sw_gr/re)) +
-                        (np.cos(klatr) * np.sin(sw_gr/re) * np.cos(sw_azr_2d)))
-
-    if verbose:
-        print(time.time() - begin_time,
-              'seconds to complete all preliminary processing')
-        begin_time = time.time()
-
-    # Get longitude at every gate
-    for j in np.arange(sweep_size):
-        for i in np.arange(radar.ngates):
-            sw_lonr[j, i] = klonr +\
-                atan2c_longitude(sw_azr_1d[j], sw_gr[j, i],
-                                 klatr, sw_latr[j, i])
-    sw_lat = np.rad2deg(sw_latr)
-    sw_lon = np.rad2deg(sw_lonr)
 
     # Determine NTDA interest fields
     csnr_sw = _calc_csnr_for_every_gate(dz_sw, sw_sr_2d)
@@ -228,7 +208,50 @@ def calc_turb_sweep(radar, sweep_number, radius=DEFAULT_RADIUS,
               'seconds to compute longitudes and precompute Csnr, Crng, Czh')
         begin_time = time.time()
 
-    xx, yy = calc_cartesian_coords_radians(sw_lonr, sw_latr, klonr, klatr)
+    if compute_gate_pos:
+        # Radar location needed to get lat/lon
+        # of every gate for distance calculations
+        klat, klon, klatr, klonr = get_radar_latlon_plus_radians(radar)
+
+        sw_azr_1d = np.deg2rad(sweep_az_sw)
+
+        sweep_size = radar.sweep_end_ray_index['data'][sweep_number] + 1 - \
+        radar.sweep_start_ray_index['data'][sweep_number]
+
+        sw_lonr = 0.0 * sweep_sw
+
+        sw_latr = np.arcsin((np.sin(klatr) * np.cos(sw_gr/re)) +
+                            (np.cos(klatr) * np.sin(sw_gr/re) * np.cos(sw_azr_2d)))
+
+        if verbose:
+            print(time.time() - begin_time,
+                'seconds to complete all preliminary processing')
+            begin_time = time.time()
+
+        # Get longitude at every gate
+        for j in np.arange(sweep_size):
+            for i in np.arange(radar.ngates):
+                sw_lonr[j, i] = klonr +\
+                    atan2c_longitude(sw_azr_1d[j], sw_gr[j, i],
+                                    klatr, sw_latr[j, i])
+        sw_lat = np.rad2deg(sw_latr)
+        sw_lon = np.rad2deg(sw_lonr)
+
+        xx, yy = calc_cartesian_coords_radians(sw_lonr, sw_latr, klonr, klatr)
+    else:
+        xx = radar.gate_x['data'][
+            radar.sweep_start_ray_index['data'][sweep_number]:
+            radar.sweep_end_ray_index['data'][sweep_number]+1]/1000.
+        yy = radar.gate_y['data'][
+            radar.sweep_start_ray_index['data'][sweep_number]:
+            radar.sweep_end_ray_index['data'][sweep_number]+1]/1000.
+
+        sw_lat = radar.gate_latitude['data'][
+            radar.sweep_start_ray_index['data'][sweep_number]:
+            radar.sweep_end_ray_index['data'][sweep_number]+1]
+        sw_lon = radar.gate_longitude['data'][
+            radar.sweep_start_ray_index['data'][sweep_number]:
+            radar.sweep_end_ray_index['data'][sweep_number]+1]
 
     # Flatten all arrays to avoid performance buzzkill of nested loops.
     # Then reduce the data using masks to make the job manageable.
@@ -309,7 +332,7 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
                   name_dz=DEFAULT_DZ, name_sw=DEFAULT_SW,
                   turb_name=DEFAULT_TURB, max_split_cut=SPLIT_CUT_MAX,
                   use_ntda=True, beamwidth=DEFAULT_BEAMWIDTH,
-                  gate_spacing=DEFAULT_GATE_SPACING):
+                  gate_spacing=DEFAULT_GATE_SPACING, compute_gate_pos=False):
     """
     Leverages calc_turb_sweep() to process an entire radar volume for
     turbulence. Has ability to account for split-cut sweeps in a volume
@@ -327,6 +350,8 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
     use_ntda = Flag to use the spatial averaging and weighting employed by NTDA
     beamwidth = Beamwidth of radar in degrees
     gate_spacing = Gate spacing of radar in km
+    compute_gate_pos = If True computes the radar gate position. Otherwise
+                       reads it from the radar object
     """
 
     if verbose:
@@ -354,7 +379,8 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
                                 verbose=verbose, xran=xran, yran=yran,
                                 name_dz=name_dz, name_sw=name_sw,
                                 use_ntda=use_ntda, beamwidth=beamwidth,
-                                gate_spacing=gate_spacing)
+                                gate_spacing=gate_spacing,
+                                compute_gate_pos=compute_gate_pos)
         except IndexError:
             print('Ran out of sweeps')
         finally:
