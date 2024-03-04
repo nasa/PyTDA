@@ -398,7 +398,7 @@ def calc_turb_vol(radar, radius=DEFAULT_RADIUS, split_cut=False,
 
 def calc_turb_rhi(radar, radius=1.0, verbose=False,
                   name_dz=DEFAULT_DZ, name_sw=DEFAULT_SW,
-                  turb_name=DEFAULT_TURB, max_split_cut=SPLIT_CUT_MAX,
+                  turb_name=DEFAULT_TURB,
                   use_ntda=True, beamwidth=None,
                   gate_spacing=DEFAULT_GATE_SPACING):
     """
