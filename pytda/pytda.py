@@ -1,7 +1,7 @@
 """
 Python Turbulence Detection Algorithm (PyTDA)
-Version 1.1.2
-Last Updated 07/31/2019
+Version 1.1.3
+Last Updated 03/04/2024
 
 
 Major References
@@ -39,6 +39,9 @@ data models.
 
 Change Log
 ----------
+Version 1.1.3 Major Changes (03/04/2024):
+1. Removed max_split_cut keyword from calc_turb_rhi.
+
 Version 1.1.2 Major Changes (07/31/2019):
 1. Fixed a bug in the RHI code that was preventing processing when
    use_ntda=False.
