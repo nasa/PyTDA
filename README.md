@@ -12,7 +12,7 @@ Installation
 
 Install [Py-ART](https://github.com/ARM-DOE/pyart).
 
-Run `python setup.py install` from the command line in the main PyTDA folder.
+Run `python -m pip install .` from the command line in the main PyTDA folder.
 
 
 Using PyTDA
