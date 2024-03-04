@@ -2,7 +2,7 @@ PyTDA README
 ------------
 
 This software provides Python functions that will estimate turbulence from
-Doppler radar data. It is tested and working under Python 2.7-3.7.
+Doppler radar data. It is tested and working under Python 3.12 and earlier versions.
 
 For help see `HELP` file. For license see `LICENSE.md`.
 
